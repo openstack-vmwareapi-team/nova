@@ -212,3 +212,46 @@ class VMwareVMUtilTestCase(test.TestCase):
         self.assertEqual("lsiLogic", vmdk_adapter_type)
         vmdk_adapter_type = vm_util.get_vmdk_adapter_type("dummyAdapter")
         self.assertEqual("dummyAdapter", vmdk_adapter_type)
+
+    def test_get_cdrom_attach_config_spec(self):
+
+        result = vm_util.get_cdrom_attach_config_spec(fake.FakeFactory(),
+                                             fake.Datastore(),
+                                             "/tmp/foo.iso",
+                                             0)
+        expected = """{
+    'deviceChange': [
+        {
+            'device': {
+                'connectable': {
+                    'allowGuestControl': False,
+                    'startConnected': True,
+                    'connected': True,
+                    'obj_name': 'ns0: VirtualDeviceConnectInfo'
+                },
+                'backing': {
+                    'datastore': {
+                        "summary.type": "VMFS",
+                        "summary.freeSpace": 536870912000,
+                        "summary.capacity": 1099511627776,
+                        "summary.name": "fake-ds"
+                    },
+                    'fileName': '/tmp/foo.iso',
+                    'obj_name': 'ns0: VirtualCdromIsoBackingInfo'
+                },
+                'controllerKey': 200,
+                'unitNumber': 0,
+                'key': -1,
+                'obj_name': 'ns0: VirtualCdrom'
+            },
+            'operation': 'add',
+            'obj_name': 'ns0: VirtualDeviceConfigSpec'
+        }
+    ],
+    'obj_name': 'ns0: VirtualMachineConfigSpec'
+}
+"""
+
+        expected = re.sub(r'\s+', '', expected)
+        result = re.sub(r'\s+', '', repr(result))
+        self.assertEqual(expected, result)

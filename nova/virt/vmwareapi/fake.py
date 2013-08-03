@@ -26,6 +26,7 @@ import pprint
 import uuid
 
 from nova import exception
+from nova.openstack.common import jsonutils
 from nova.openstack.common import log as logging
 from nova.virt.vmwareapi import error_util
 
@@ -209,11 +210,18 @@ class ManagedObject(object):
         self.__class__._counter += 1
         return prefix + "-" + str(self.__class__._counter)
 
+    def __repr__(self):
+        return jsonutils.dumps(dict([(elem.name, elem.val)
+                                for elem in self.propSet]))
+
 
 class DataObject(object):
     """Data object base class."""
     def __init__(self, obj_name=None):
         self.obj_name = obj_name
+
+    def __repr__(self):
+        return str(self.__dict__)
 
 
 class VirtualDisk(DataObject):
@@ -292,6 +300,9 @@ class VirtualMachine(ManagedObject):
         setting of the Virtual Machine object.
         """
         try:
+            if len(val.deviceChange) < 2:
+                return
+
             # Case of Reconfig of VM to attach disk
             controller_key = val.deviceChange[1].device.controllerKey
             filename = val.deviceChange[1].device.backing.fileName

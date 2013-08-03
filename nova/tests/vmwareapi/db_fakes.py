@@ -48,6 +48,12 @@ def stub_out_db_instance_api(stubs):
         def __getattr__(self, name):
             return self.values[name]
 
+        def get(self, attr):
+            try:
+                return self.__getattr__(attr)
+            except KeyError:
+                return None
+
         def __getitem__(self, key):
             if key in self.values:
                 return self.values[key]
