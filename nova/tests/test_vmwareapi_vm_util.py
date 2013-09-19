@@ -255,3 +255,29 @@ class VMwareVMUtilTestCase(test.TestCase):
         expected = re.sub(r'\s+', '', expected)
         result = re.sub(r'\s+', '', repr(result))
         self.assertEqual(expected, result)
+
+    def test_propset_dict_simple(self):
+        ObjectContent = collections.namedtuple('ObjectContent', ['propSet'])
+        DynamicProperty = collections.namedtuple('Property', ['name', 'val'])
+
+        object = ObjectContent(propSet=[
+                    DynamicProperty(name='foo', val="bar")])
+        propdict = vm_util.propset_dict(object.propSet)
+        self.assertEqual("bar", propdict['foo'])
+
+    def test_propset_dict_complex(self):
+        ObjectContent = collections.namedtuple('ObjectContent', ['propSet'])
+        DynamicProperty = collections.namedtuple('Property', ['name', 'val'])
+        MoRef = collections.namedtuple('Val', ['value'])
+
+        object = ObjectContent(propSet=[
+                    DynamicProperty(name='foo', val="bar"),
+                    DynamicProperty(name='some.thing',
+                                    val=MoRef(value='else')),
+                    DynamicProperty(name='another.thing', val='value')])
+
+        propdict = vm_util.propset_dict(object.propSet)
+        self.assertEqual("bar", propdict['foo'])
+        self.assertTrue(hasattr(propdict['some.thing'], 'value'))
+        self.assertEqual("else", propdict['some.thing'].value)
+        self.assertEqual("value", propdict['another.thing'])

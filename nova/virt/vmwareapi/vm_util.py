@@ -19,6 +19,7 @@
 The VMware API VM utility module to build SOAP object specs.
 """
 
+import collections
 import copy
 
 from nova import exception
@@ -759,13 +760,82 @@ def get_host_ref(session, cluster=None):
     return host_mor
 
 
+def propset_dict(propset):
+    """Turn a propset list into a dictionary
+
+    PropSet is an optional attribute on ObjectContent objects
+    that are returned by the VMware API.
+
+    You can read more about these at:
+    http://pubs.vmware.com/vsphere-51/index.jsp
+        #com.vmware.wssdk.apiref.doc/
+            vmodl.query.PropertyCollector.ObjectContent.html
+
+    :param propset: a property "set" from ObjectContent
+    :return: dictionary representing property set
+    """
+    if propset is None:
+        return {}
+
+    #TODO(hartsocks): once support for Python 2.6 is dropped
+    # change to {[(prop.name, prop.val) for prop in propset]}
+    return dict([(prop.name, prop.val) for prop in propset])
+
+
+def _get_datastore_ref_and_name(data_stores, datastore_regex=None):
+    # selects the datastore with the most freespace
+    """Find a usable datastore in a given RetrieveResult object.
+
+    :param data_stores: a RetrieveResult object from vSphere API call
+    :param datastore_regex: an optional regular expression to match names
+    :return: datastore_ref, datastore_name, capacity, freespace
+    """
+    DSRecord = collections.namedtuple(
+        'DSRecord', ['datastore', 'name', 'capacity', 'freespace'])
+
+    # we lean on checks performed in caller methods to validate the
+    # datastore reference is not None. If it is, the caller handles
+    # a None reference as appropriate in its context.
+    found_ds = DSRecord(datastore=None, name=None, capacity=None, freespace=0)
+
+    for obj_content in data_stores:
+        # the propset attribute "need not be set" by returning API
+        if not hasattr(obj_content, 'propSet'):
+            continue
+
+        propdict = propset_dict(obj_content.propSet)
+        # Local storage identifier vSphere doesn't support CIFS or
+        # vfat for datastores, therefore filtered
+        ds_type = propdict['summary.type']
+        ds_name = propdict['summary.name']
+        if ((ds_type == 'VMFS' or ds_type == 'NFS') and
+                propdict['summary.accessible']):
+            if datastore_regex is None or datastore_regex.match(ds_name):
+                new_ds = DSRecord(
+                    datastore=obj_content.obj,
+                    name=ds_name,
+                    capacity=propdict['summary.capacity'],
+                    freespace=propdict['summary.freeSpace'])
+                # find the largest freespace to return
+                if new_ds.freespace > found_ds.freespace:
+                    found_ds = new_ds
+
+    #TODO(hartsocks): refactor driver to use DSRecord namedtuple
+    # using DSRecord through out will help keep related information
+    # together and improve readability and organisation of the code.
+    if found_ds.datastore is not None:
+        return (found_ds.datastore, found_ds.name,
+                    found_ds.capacity, found_ds.freespace)
+
+
 def get_datastore_ref_and_name(session, cluster=None, host=None,
                                datastore_regex=None):
     """Get the datastore list and choose the first local storage."""
     if cluster is None and host is None:
         data_stores = session._call_method(vim_util, "get_objects",
                     "Datastore", ["summary.type", "summary.name",
-                                  "summary.capacity", "summary.freeSpace"])
+                                  "summary.capacity", "summary.freeSpace",
+                                  "summary.accessible"])
     else:
         if cluster is not None:
             datastore_ret = session._call_method(
@@ -785,32 +855,20 @@ def get_datastore_ref_and_name(session, cluster=None, host=None,
                                 "get_properties_for_a_collection_of_objects",
                                 "Datastore", data_store_mors,
                                 ["summary.type", "summary.name",
-                                 "summary.capacity", "summary.freeSpace"])
-    for elem in data_stores:
-        ds_name = None
-        ds_type = None
-        ds_cap = None
-        ds_free = None
-        for prop in elem.propSet:
-            if prop.name == "summary.type":
-                ds_type = prop.val
-            elif prop.name == "summary.name":
-                ds_name = prop.val
-            elif prop.name == "summary.capacity":
-                ds_cap = prop.val
-            elif prop.name == "summary.freeSpace":
-                ds_free = prop.val
-        # Local storage identifier
-        if ds_type == "VMFS" or ds_type == "NFS":
-            if not datastore_regex or datastore_regex.match(ds_name):
-                return elem.obj, ds_name, ds_cap, ds_free
+                                 "summary.capacity", "summary.freeSpace",
+                                 "summary.accessible"])
 
-    if datastore_regex:
-        raise exception.DatastoreNotFound(
-                _("Datastore regex %s did not match any datastores")
-                % datastore_regex.pattern)
+    results = _get_datastore_ref_and_name(data_stores, datastore_regex)
+
+    if results:
+        return results
     else:
-        raise exception.DatastoreNotFound()
+        if datastore_regex:
+            raise exception.DatastoreNotFound(
+                    _("Datastore regex %s did not match any datastores")
+                    % datastore_regex.pattern)
+        else:
+            raise exception.DatastoreNotFound()
 
 
 def get_vmdk_adapter_type(adapter_type):
