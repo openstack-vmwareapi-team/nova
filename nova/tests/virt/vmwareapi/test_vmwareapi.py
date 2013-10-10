@@ -36,12 +36,14 @@ from nova import context
 from nova import db
 from nova import exception
 from nova.openstack.common import jsonutils
+from nova.openstack.common import uuidutils
 from nova import test
 import nova.tests.image.fake
 from nova.tests import matchers
 from nova.tests import utils
 from nova.tests.virt.vmwareapi import db_fakes
 from nova.tests.virt.vmwareapi import stubs
+from nova import utils as nova_utils
 from nova.virt import driver as v_driver
 from nova.virt import fake
 from nova.virt.vmwareapi import driver
@@ -198,12 +200,15 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
         self.conn = driver.VMwareAPISession()
         self.assertEqual(self.attempts, 2)
 
-    def _create_instance_in_the_db(self, node=None, set_image_ref=True):
+    def _create_instance_in_the_db(self, node=None, set_image_ref=True,
+                                   uuid=None):
         if not node:
             node = self.node_name
+        if not uuid:
+            uuid = uuidutils.generate_uuid()
         values = {'name': 'fake_name',
                   'id': 1,
-                  'uuid': "fake-uuid",
+                  'uuid': uuid,
                   'project_id': self.project_id,
                   'user_id': self.user_id,
                   'kernel_id': "fake_kernel_uuid",
@@ -216,13 +221,14 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
         if set_image_ref:
             values['image_ref'] = "fake_image_uuid"
         self.instance_node = node
+        self.uuid = uuid
         self.instance = db.instance_create(None, values)
 
-    def _create_vm(self, node=None, num_instances=1):
+    def _create_vm(self, node=None, num_instances=1, uuid=None):
         """Create and spawn the VM."""
         if not node:
             node = self.node_name
-        self._create_instance_in_the_db(node=node)
+        self._create_instance_in_the_db(node=node, uuid=uuid)
         self.type_data = db.flavor_get_by_name(None, 'm1.large')
         self.conn.spawn(self.context, self.instance, self.image,
                         injected_files=[], admin_password=None,
@@ -239,7 +245,7 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
         self.assertEquals(len(instances), num_instances)
 
         # Get Nova record for VM
-        vm_info = self.conn.get_info({'uuid': 'fake-uuid',
+        vm_info = self.conn.get_info({'uuid': self.uuid,
                                       'name': 1,
                                       'node': self.instance_node})
 
@@ -296,6 +302,16 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
         instances = self.conn.list_instances()
         self.assertEquals(len(instances), 1)
 
+    def test_list_instance_uuids(self):
+        self._create_vm()
+        uuids = self.conn.list_instance_uuids()
+        self.assertEqual(len(uuids), 1)
+
+    def test_list_instance_uuids_invalid_uuid(self):
+        self._create_vm(uuid='fake_id')
+        uuids = self.conn.list_instance_uuids()
+        self.assertEqual(len(uuids), 0)
+
     def test_instance_dir_disk_created(self):
         """Test image file is cached when even when use_linked_clone
             is False
@@ -321,7 +337,7 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
 
     def test_spawn(self):
         self._create_vm()
-        info = self.conn.get_info({'uuid': 'fake-uuid',
+        info = self.conn.get_info({'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.RUNNING)
 
@@ -332,7 +348,7 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
                 requested_size, mox.IgnoreArg(), mox.IgnoreArg())
         self.mox.ReplayAll()
         self._create_vm()
-        info = self.conn.get_info({'uuid': 'fake-uuid',
+        info = self.conn.get_info({'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.RUNNING)
 
@@ -350,7 +366,7 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
                 requested_size, mox.IgnoreArg(), mox.IgnoreArg())
         self.mox.ReplayAll()
         self._create_vm()
-        info = self.conn.get_info({'uuid': 'fake-uuid',
+        info = self.conn.get_info({'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.RUNNING)
 
@@ -434,12 +450,12 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
                   'expected_state': task_states.IMAGE_PENDING_UPLOAD}}]
         func_call_matcher = matchers.FunctionCallMatcher(expected_calls)
         self._create_vm()
-        info = self.conn.get_info({'uuid': 'fake-uuid',
+        info = self.conn.get_info({'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.RUNNING)
         self.conn.snapshot(self.context, self.instance, "Test-Snapshot",
                            func_call_matcher.call)
-        info = self.conn.get_info({'uuid': 'fake-uuid',
+        info = self.conn.get_info({'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.RUNNING)
         self.assertIsNone(func_call_matcher.match())
@@ -455,26 +471,26 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
 
     def test_reboot(self):
         self._create_vm()
-        info = self.conn.get_info({'name': 1, 'uuid': 'fake-uuid',
+        info = self.conn.get_info({'name': 1, 'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.RUNNING)
         reboot_type = "SOFT"
         self.conn.reboot(self.context, self.instance, self.network_info,
                          reboot_type)
-        info = self.conn.get_info({'name': 1, 'uuid': 'fake-uuid',
+        info = self.conn.get_info({'name': 1, 'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.RUNNING)
 
     def test_reboot_with_uuid(self):
         """Test fall back to use name when can't find by uuid."""
         self._create_vm()
-        info = self.conn.get_info({'name': 'fake-uuid', 'uuid': 'wrong-uuid',
+        info = self.conn.get_info({'name': 'fake-name', 'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.RUNNING)
         reboot_type = "SOFT"
         self.conn.reboot(self.context, self.instance, self.network_info,
                          reboot_type)
-        info = self.conn.get_info({'name': 'fake-uuid', 'uuid': 'wrong-uuid',
+        info = self.conn.get_info({'name': 'fake-name', 'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.RUNNING)
 
@@ -495,11 +511,11 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
 
     def test_reboot_not_poweredon(self):
         self._create_vm()
-        info = self.conn.get_info({'uuid': 'fake-uuid',
+        info = self.conn.get_info({'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.RUNNING)
         self.conn.suspend(self.instance)
-        info = self.conn.get_info({'uuid': 'fake-uuid',
+        info = self.conn.get_info({'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.SUSPENDED)
         self.assertRaises(exception.InstanceRebootFailure, self.conn.reboot,
@@ -508,11 +524,11 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
 
     def test_suspend(self):
         self._create_vm()
-        info = self.conn.get_info({'uuid': "fake-uuid",
+        info = self.conn.get_info({'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.RUNNING)
         self.conn.suspend(self.instance)
-        info = self.conn.get_info({'uuid': 'fake-uuid',
+        info = self.conn.get_info({'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.SUSPENDED)
 
@@ -523,15 +539,15 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
 
     def test_resume(self):
         self._create_vm()
-        info = self.conn.get_info({'uuid': 'fake-uuid',
+        info = self.conn.get_info({'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.RUNNING)
         self.conn.suspend(self.instance)
-        info = self.conn.get_info({'uuid': 'fake-uuid',
+        info = self.conn.get_info({'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.SUSPENDED)
         self.conn.resume(self.instance, self.network_info)
-        info = self.conn.get_info({'uuid': 'fake-uuid',
+        info = self.conn.get_info({'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.RUNNING)
 
@@ -542,7 +558,7 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
 
     def test_resume_not_suspended(self):
         self._create_vm()
-        info = self.conn.get_info({'uuid': 'fake-uuid',
+        info = self.conn.get_info({'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.RUNNING)
         self.assertRaises(exception.InstanceResumeFailure, self.conn.resume,
@@ -550,15 +566,15 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
 
     def test_power_on(self):
         self._create_vm()
-        info = self.conn.get_info({'uuid': 'fake-uuid',
+        info = self.conn.get_info({'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.RUNNING)
         self.conn.power_off(self.instance)
-        info = self.conn.get_info({'uuid': 'fake-uuid',
+        info = self.conn.get_info({'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.SHUTDOWN)
         self.conn.power_on(self.context, self.instance, self.network_info)
-        info = self.conn.get_info({'uuid': 'fake-uuid',
+        info = self.conn.get_info({'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.RUNNING)
 
@@ -569,11 +585,11 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
 
     def test_power_off(self):
         self._create_vm()
-        info = self.conn.get_info({'uuid': 'fake-uuid',
+        info = self.conn.get_info({'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.RUNNING)
         self.conn.power_off(self.instance)
-        info = self.conn.get_info({'uuid': 'fake-uuid',
+        info = self.conn.get_info({'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.SHUTDOWN)
 
@@ -585,7 +601,7 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
     def test_power_off_suspended(self):
         self._create_vm()
         self.conn.suspend(self.instance)
-        info = self.conn.get_info({'uuid': 'fake-uuid',
+        info = self.conn.get_info({'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.SUSPENDED)
         self.assertRaises(exception.InstancePowerOffFailure,
@@ -627,13 +643,13 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
 
     def test_get_info(self):
         self._create_vm()
-        info = self.conn.get_info({'uuid': 'fake-uuid',
+        info = self.conn.get_info({'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.RUNNING)
 
     def test_destroy(self):
         self._create_vm()
-        info = self.conn.get_info({'uuid': 'fake-uuid',
+        info = self.conn.get_info({'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.RUNNING)
         instances = self.conn.list_instances()
@@ -652,17 +668,17 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
             pass
 
         self._create_vm()
-        info = self.conn.get_info({'name': 1, 'uuid': 'fake-uuid',
+        info = self.conn.get_info({'name': 1, 'uuid': self.uuid,
                                    'node': self.instance_node})
         self.stubs.Set(self.conn._volumeops, "attach_disk_to_vm",
                        fake_attach_disk_to_vm)
         self.conn.rescue(self.context, self.instance, self.network_info,
                          self.image, 'fake-password')
         info = self.conn.get_info({'name-rescue': 1,
-                                   'uuid': 'fake-uuid-rescue',
+                                   'uuid': '%s-rescue' % self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.RUNNING)
-        info = self.conn.get_info({'name': 1, 'uuid': 'fake-uuid',
+        info = self.conn.get_info({'name': 1, 'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.SHUTDOWN)
 
@@ -672,7 +688,7 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
     def test_unrescue(self):
         self._rescue()
         self.conn.unrescue(self.instance, None)
-        info = self.conn.get_info({'name': 1, 'uuid': 'fake-uuid',
+        info = self.conn.get_info({'name': 1, 'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.RUNNING)
 
@@ -1122,12 +1138,22 @@ class VMwareAPIVCDriverTestCase(VMwareAPIVMTestCase):
         self.assertIn(self.node_name2, nodelist)
 
     def test_spawn_multiple_node(self):
-        self._create_vm(node=self.node_name, num_instances=1)
-        info = self.conn.get_info({'uuid': 'fake-uuid',
+
+        def fake_is_neutron():
+            return False
+
+        self.stubs.Set(nova_utils, 'is_neutron', fake_is_neutron)
+        uuid1 = uuidutils.generate_uuid()
+        uuid2 = uuidutils.generate_uuid()
+        self._create_vm(node=self.node_name, num_instances=1,
+                        uuid=uuid1)
+        info = self.conn.get_info({'uuid': uuid1,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.RUNNING)
-        self._create_vm(node=self.node_name2, num_instances=2)
-        info = self.conn.get_info({'uuid': 'fake-uuid',
+        self.conn.destroy(self.instance, self.network_info)
+        self._create_vm(node=self.node_name2, num_instances=1,
+                        uuid=uuid2)
+        info = self.conn.get_info({'uuid': uuid2,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.RUNNING)
 
@@ -1194,6 +1220,6 @@ class VMwareAPIVCDriverTestCase(VMwareAPIVMTestCase):
 
         self.mox.ReplayAll()
         self._create_vm()
-        info = self.conn.get_info({'uuid': 'fake-uuid',
+        info = self.conn.get_info({'uuid': self.uuid,
                                    'node': self.instance_node})
         self._check_vm_info(info, power_state.RUNNING)
