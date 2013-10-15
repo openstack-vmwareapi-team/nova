@@ -30,13 +30,18 @@ def stub_out_db_instance_api(stubs):
     """Stubs out the db API for creating Instances."""
 
     INSTANCE_TYPES = {
-        'm1.tiny': dict(memory_mb=512, vcpus=1, root_gb=0, flavorid=1),
-        'm1.small': dict(memory_mb=2048, vcpus=1, root_gb=20, flavorid=2),
+        'm1.tiny': dict(memory_mb=512, vcpus=1, root_gb=0, flavorid=1,
+                        ephemeral_gb=0),
+        'm1.small': dict(memory_mb=2048, vcpus=1, root_gb=20, flavorid=2,
+                         ephemeral_gb=20),
         'm1.medium':
-            dict(memory_mb=4096, vcpus=2, root_gb=40, flavorid=3),
-        'm1.large': dict(memory_mb=8192, vcpus=4, root_gb=80, flavorid=4),
+            dict(memory_mb=4096, vcpus=2, root_gb=40, flavorid=3,
+                 ephemeral_gb=50),
+        'm1.large': dict(memory_mb=8192, vcpus=4, root_gb=80, flavorid=4,
+                         ephemeral_gb=100),
         'm1.xlarge':
-            dict(memory_mb=16384, vcpus=8, root_gb=160, flavorid=5)}
+            dict(memory_mb=16384, vcpus=8, root_gb=160, flavorid=5,
+                 ephemeral_gb=200)}
 
     class FakeModel(object):
         """Stubs out for model."""
@@ -81,6 +86,7 @@ def stub_out_db_instance_api(stubs):
             'vcpus': type_data['vcpus'],
             'mac_addresses': [{'address': values['mac_address']}],
             'root_gb': type_data['root_gb'],
+            'ephemeral_gb': type_data['ephemeral_gb'],
             'node': values['node'],
             'metadata': []
             }

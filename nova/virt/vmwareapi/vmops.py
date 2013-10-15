@@ -1,5 +1,6 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 
+# Copyright (c) 2013 Canonical Ltd.
 # Copyright (c) 2013 Hewlett-Packard Development Company, L.P.
 # Copyright (c) 2012 VMware, Inc.
 # Copyright (c) 2011 Citrix Systems, Inc.
@@ -25,6 +26,7 @@ import base64
 import collections
 import copy
 import os
+import posixpath
 import time
 import urllib
 import urllib2
@@ -572,6 +574,35 @@ class VMwareVMOps(object):
                         LOG.warning(_("Root disk file creation "
                                       "failed - %s"), e)
 
+            # Create ephemeral disk for instance.
+            if instance['ephemeral_gb']:
+                ephemeral_size = instance['ephemeral_gb'] * unit.Mi
+                ephemeral_disk_name = posixpath.join(instance['uuid'],
+                                         'ephemeral_disk.vmdk')
+                ephemeral_disk_path = vm_util.build_datastore_path(
+                                data_store_name, ephemeral_disk_name)
+
+                disk_create_spec = vm_util.get_vmdk_create_spec(
+                        client_factory, ephemeral_size, adapter_type,
+                        disk_type)
+
+                LOG.debug(_("Creating ephemeral disk of size "
+                        "%(ephemeral_size)s KB and adapter type "
+                        "lsiLogic on the host local store "
+                        "%(data_store_name)s"),
+                        {"ephemeral_size": ephemeral_size,
+                        "data_store_name": data_store_name}, instance=instance)
+                vmdk_create_task = self._session._call_method(
+                                        self._session._get_vim(),
+                                        "CreateVirtualDisk_Task",
+                                        service_content.virtualDiskManager,
+                                        name=ephemeral_disk_path,
+                                        datacenter=dc_ref,
+                                        spec=disk_create_spec)
+
+                self._session._wait_for_task(instance['uuid'],
+                                             vmdk_create_task)
+
             # Attach the root disk to the VM.
             self._volumeops.attach_disk_to_vm(
                                 vm_ref, instance,
@@ -594,6 +625,17 @@ class VMwareVMOps(object):
                     data_store_ref,
                     uploaded_iso_path,
                     1 if adapter_type in ['ide'] else 0)
+
+            if instance['ephemeral_gb']:
+                # Attach ephemeral disk to the VM. Use lsiLogic controller
+                # for ephemeral disk.
+                adapter_type = 'lsiLogic'
+                self._volumeops.attach_disk_to_vm(vm_ref, instance,
+                                                  adapter_type,
+                                                  disk_type,
+                                                  ephemeral_disk_path,
+                                                  ephemeral_size,
+                                                  linked_clone=False)
 
         else:
             # Attach the root disk to the VM.

@@ -68,6 +68,7 @@ class ConfigDriveTestCase(test.NoDBTestCase):
                               'instance_type': 'm1.large',
                               'vcpus': 4,
                               'root_gb': 80,
+                              'ephemeral_gb': 100,
                               'image_ref': '1',
                               'host': 'fake_host',
                               'task_state':

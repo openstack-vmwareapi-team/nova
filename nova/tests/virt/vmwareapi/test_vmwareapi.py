@@ -218,6 +218,7 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
                   'instance_type': 'm1.large',
                   'node': node,
                   'root_gb': 80,
+                  'ephemeral_gb': 200,
                   }
         if set_image_ref:
             values['image_ref'] = "fake_image_uuid"
@@ -335,6 +336,11 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
                 self.ds)
         self.assertTrue(vmwareapi_fake.get_file(file))
         self.assertTrue(vmwareapi_fake.get_file(root))
+
+    def test_ephemeral_disk_created(self):
+        self._create_vm(uuid='fake-uuid')
+        file_path = '[fake-ds] fake-uuid/ephemeral_disk.vmdk'
+        self.assertEqual(vmwareapi_fake.get_file(file_path), True)
 
     def test_spawn(self):
         self._create_vm()
