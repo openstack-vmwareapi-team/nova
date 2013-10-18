@@ -1,0 +1,131 @@
+commit eb73953588f2fd97f38d61e6e3a1e5c9692f563f
+Author: hartsocks <hartsocks@vmware.com>
+Date:   Wed Sep 18 17:06:00 2013
+
+    Fixes datastore selection bug
+    
+    Currently the vmwareapi drivers will only select the first
+    available datastore it finds, even when there are other
+    datastores with capacity, it will fill one datastore completely
+    and then die.
+    
+    Closes-bug: 1227825
+    
+    Change-Id: I24f85114ea3f014950c27c0c91a6be352990d263
+    (cherry picked from commit 6c4b89a2ad51f92707acc01908b63bc507ad8fe7)
+    
+    Conflicts:
+    
+    	nova/tests/test_vmwareapi_vm_util.py
+    	nova/virt/vmwareapi/vm_util.py
+    
+    Change-Id: I6e653a9bc39580164981e066345dd214229f7ff7
+    (cherry picked from commit ca90747bdd0c3f09f78a1c4e5e21bbbde64e00e2)
+    
+    Conflicts:
+    	nova/tests/test_vmwareapi_vm_util.py
+
+commit 594262212ddec0f55cc58eee67213255e2584e4c
+Author: Davanum Srinivas <dims@linux.vnet.ibm.com>
+Date:   Fri Aug 2 17:07:02 2013
+
+    VMware: Config Drive Support
+    
+    Create the config drive iso, upload it to the correct location,
+    then create a VirtualMachineConfigSpec with appropriate contents
+    and run the ReconfigVM_Task to enable the iso.
+    
+    DocImpact
+    
+    Fixes LP# 1206584
+    Fixes BP vmware-config-drive-support
+    
+    (cherry picked from commit 3c59d998c5e6b80549053b01f919ac318cd31b13)
+    
+    Conflicts:
+    
+    	nova/tests/test_vmwareapi_vm_util.py
+    	nova/tests/vmwareapi/db_fakes.py
+    	nova/virt/vmwareapi/fake.py
+    	nova/virt/vmwareapi/vmops.py
+    
+    Change-Id: Ie39c71cf7b0dccb71340b5bf8871d5e086576f4d
+    (cherry picked from commit f8b6d2182b795b2c6cab0f40dc9b72a13a056492)
+    
+    Conflicts:
+    	nova/virt/vmwareapi/vmops.py
+
+commit b6f73f89aaf7c345993e8c7f16a8fa4f4940506f
+Author: Tracy Jones <tjones@vmware.com>
+Date:   Thu Sep 19 16:34:34 2013
+
+    VMWare: Disabling linked clone doesn't cache images
+    
+    This fixes an issue when use_linked_clone is false and the image is
+    already in the cache.  The problem was that the image would be
+    copied from glance into the instance directory even if it was already
+    in the cache.  This change checks if the file is in the cache, only
+    copies from glance if it is not, and copies the image from the cache
+    into the instance directory if use_linked_clone is false.
+    
+    Fixes: bug #1207064
+    (cherry picked from commit c53b0f66802ed82fea8c637f0138c0a01e159efa)
+    
+    Conflicts:
+    
+    	nova/tests/virt/vmwareapi/test_vmwareapi.py
+    	nova/virt/vmwareapi/vmops.py
+    
+    Change-Id: I635e00448fc014b3841ed43b590d451305e8ff2f
+    (cherry picked from commit 2f94155c34209422ce9c0c3d643e48aa6b367054)
+
+commit d066358f37df67b483485762536196749a2176be
+Author: Gary Kotton <gkotton@vmware.com>
+Date:   Mon Sep 16 05:50:12 2013
+
+    VMware: Fix bug for root disk size
+    
+    The code would not configure the root disk size to that specified
+    in the flavor. This was always the size of the glance image.
+    
+    Fixes bug: 1226052
+    
+    (cherry picked from commit f0a9b31d90532dd278c12572767c3874648dcaec)
+    
+    Conflicts:
+    
+    	nova/tests/virt/vmwareapi/test_vmwareapi.py
+    	nova/virt/vmwareapi/vmops.py
+    
+    Change-Id: Ifc41e6f5bf95c17bac6ab26e9c08aa28d0325bcd
+    (cherry picked from commit 333e0160088e769ace4767b4c9aa6a6dd08325c4)
+
+commit 76b8e8340d01c023576446506bb246c5ffdff0a9
+Author: Vui Lam <vui@vmware.com>
+Date:   Mon Aug 5 00:37:47 2013
+
+    VMwareVCDriver Fix sparse disk copy error on spawn
+    
+    The same approach of calling VirtualDiskManager.CopyVirtualDisk
+    without destination disk spec in the cluster driver for fixing 1184807
+    turns out to work for copying a sparse disk as well because vCenter's behavior
+    for specless copy is to do the reasonable thing of converting a sparse disk to
+    thin-provisioned, and a flat disk to preallocated.
+    
+    Tests done:
+    
+    Verified using tempest that sparse/thin/preallocated image types deploys
+    properly through the cluster driver. Tempest output to be included in
+    the review comments.
+    
+    Fixes bug 1171226
+    
+    (cherry picked from commit 42e929e990c7d5c4484c05bc92e57f64ca85629e)
+    
+    Conflicts:
+    
+    	nova/tests/virt/vmwareapi/test_vmwareapi.py
+    	nova/virt/vmwareapi/vmops.py
+    
+    Change-Id: I51627ddb4b9df8cf80f0b9c6efe68ec9eb68cd99
+    (cherry picked from commit e0fef8f5ebbede37788917f56b89d183fa1bee9c)
