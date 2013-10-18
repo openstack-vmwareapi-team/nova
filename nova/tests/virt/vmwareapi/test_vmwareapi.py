@@ -161,10 +161,11 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
         self.user_id = 'fake'
         self.project_id = 'fake'
         self.node_name = 'test_url'
+        self.ds = 'ds1'
         self.context = context.RequestContext(self.user_id, self.project_id)
-        vmwareapi_fake.reset()
         db_fakes.stub_out_db_instance_api(self.stubs)
         stubs.set_stubs(self.stubs)
+        vmwareapi_fake.reset()
         self.conn = driver.VMwareESXDriver(fake.FakeVirtAPI)
         # NOTE(vish): none of the network plugging code is actually
         #             being tested
@@ -301,8 +302,8 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
         """
 
         self._create_vm()
-        inst_file_path = '[fake-ds] fake-uuid/fake_name.vmdk'
-        cache_file_path = '[fake-ds] vmware_base/fake_image_uuid.vmdk'
+        inst_file_path = '[%s] %s/fake_name.vmdk' % (self.ds, self.uuid)
+        cache_file_path = '[%s] vmware_base/fake_image_uuid.vmdk' % self.ds
         self.assertTrue(vmwareapi_fake.get_file(inst_file_path))
         self.assertTrue(vmwareapi_fake.get_file(cache_file_path))
 
@@ -310,8 +311,8 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
         """Test image disk is cached when use_linked_clone is True."""
         self.flags(use_linked_clone=True, group='vmware')
         self._create_vm()
-        cache_file_path = '[fake-ds] vmware_base/fake_image_uuid.vmdk'
-        cache_root_path = '[fake-ds] vmware_base/fake_image_uuid.80.vmdk'
+        cache_file_path = '[%s] vmware_base/fake_image_uuid.vmdk' % self.ds
+        cache_root_path = '[%s] vmware_base/fake_image_uuid.80.vmdk' % self.ds
         self.assertTrue(vmwareapi_fake.get_file(cache_file_path))
         self.assertTrue(vmwareapi_fake.get_file(cache_root_path))
 
@@ -1066,9 +1067,14 @@ class VMwareAPIVCDriverTestCase(VMwareAPIVMTestCase):
         self.flags(cluster_name=[cluster_name, cluster_name2],
                    task_poll_interval=10, datastore_regex='.*', group='vmware')
         self.flags(vnc_enabled=False)
+        vmwareapi_fake.reset(vc=True)
         self.conn = driver.VMwareVCDriver(None, False)
         self.node_name = self.conn._resources.keys()[0]
         self.node_name2 = self.conn._resources.keys()[1]
+        if cluster_name2 in self.node_name2:
+            self.ds = 'ds1'
+        else:
+            self.ds = 'ds2'
         self.vnc_host = 'ha-host'
 
     def tearDown(self):
