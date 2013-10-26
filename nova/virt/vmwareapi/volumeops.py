@@ -456,7 +456,7 @@ class VMwareVolumeOps(object):
         driver_type = connection_info['driver_volume_type']
         LOG.debug(_("Root volume attach. Driver type: %s"), driver_type,
                   instance=instance)
-        if driver_type == 'vmdk':
+        if driver_type == 'vmdk' and self._vc_support:
             vm_ref = vm_util.get_vm_ref(self._session, instance)
             data = connection_info['data']
             # Get the volume ref

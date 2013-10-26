@@ -363,7 +363,7 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
         self.assertRaises(exception.InstanceUnacceptable,
                           self._create_vm)
 
-    def _spawn_attach_volume_vmdk(self, set_image_ref=True):
+    def _spawn_attach_volume_vmdk(self, vc_support=False, set_image_ref=True):
         self._create_instance_in_the_db(set_image_ref=set_image_ref)
         self.type_data = db.flavor_get_by_name(None, 'm1.large')
         self.mox.StubOutWithMock(block_device, 'volume_in_mapping')
@@ -373,14 +373,15 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
         v_driver.block_device_info_get_mapping(
                 mox.IgnoreArg()).AndReturn(root_disk)
         mount_point = '/dev/vdc'
-        self.mox.StubOutWithMock(volumeops.VMwareVolumeOps,
-                                 '_get_res_pool_of_vm')
-        volumeops.VMwareVolumeOps._get_res_pool_of_vm(
-                 mox.IgnoreArg()).AndReturn('fake_res_pool')
-        self.mox.StubOutWithMock(volumeops.VMwareVolumeOps,
-                                 '_relocate_vmdk_volume')
-        volumeops.VMwareVolumeOps._relocate_vmdk_volume(mox.IgnoreArg(),
-                 'fake_res_pool', mox.IgnoreArg())
+        if vc_support:
+            self.mox.StubOutWithMock(volumeops.VMwareVolumeOps,
+                                     '_get_res_pool_of_vm')
+            volumeops.VMwareVolumeOps._get_res_pool_of_vm(
+                     mox.IgnoreArg()).AndReturn('fake_res_pool')
+            self.mox.StubOutWithMock(volumeops.VMwareVolumeOps,
+                                     '_relocate_vmdk_volume')
+            volumeops.VMwareVolumeOps._relocate_vmdk_volume(mox.IgnoreArg(),
+                     'fake_res_pool', mox.IgnoreArg())
         self.mox.StubOutWithMock(volumeops.VMwareVolumeOps,
                                  'attach_volume')
         volumeops.VMwareVolumeOps.attach_volume(connection_info,
