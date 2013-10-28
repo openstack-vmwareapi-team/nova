@@ -3334,6 +3334,15 @@
 # Options defined in nova.virt.vmwareapi.vmops
 #
 
+# Where cached images are stored on the datastore. This is NOT
+# the full path - just a folder name. (string value)
+#cache_folder=vmware_base
+
+# Where temporary images are stored on the datastore. This is
+# NOT the full path - just a folder name. The is used for
+# downloading images and image snapshots. (string value)
+#tmp_folder=vmware_tmp
+
 # Name of Integration Bridge (string value)
 #integration_bridge=br-int
 
