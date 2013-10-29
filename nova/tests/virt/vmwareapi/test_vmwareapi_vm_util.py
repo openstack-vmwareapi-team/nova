@@ -22,16 +22,20 @@ import re
 from nova import exception
 from nova.openstack.common.gettextutils import _
 from nova import test
+from nova import unit
 from nova.virt.vmwareapi import fake
 from nova.virt.vmwareapi import vm_util
 
 
 class fake_session(object):
-    def __init__(self, ret=None):
+    def __init__(self, *ret):
         self.ret = ret
+        self.ind = 0
 
     def _call_method(self, *args):
-        return self.ret
+        # return fake objects in circular manner
+        self.ind = (self.ind + 1) % len(self.ret)
+        return self.ret[self.ind - 1]
 
 
 class partialObject(object):
@@ -70,6 +74,19 @@ class VMwareVMUtilTestCase(test.NoDBTestCase):
             fake_session(fake_objects), None, None, datastore_valid_regex)
         self.assertEquals("openstack-ds0", result[1])
 
+    def test_get_datastore_ref_and_name_with_token(self):
+        regex = re.compile("^ds.*\d$")
+        fake_obj0 = fake.FakeRetrieveResult()
+        fake_obj0.add_object(fake.Datastore("ds0", 10 * unit.Gi, 5 * unit.Gi))
+        fake_obj0.add_object(fake.Datastore("foo", 10 * unit.Gi, 9 * unit.Gi))
+        setattr(fake_obj0, 'token', 'token-0')
+        fake_obj1 = fake.FakeRetrieveResult()
+        fake_obj1.add_object(fake.Datastore("ds2", 10 * unit.Gi, 8 * unit.Gi))
+        fake_obj1.add_object(fake.Datastore("ds3", 10 * unit.Gi, 1 * unit.Gi))
+        result = vm_util.get_datastore_ref_and_name(
+            fake_session(fake_obj0, fake_obj1), None, None, regex)
+        self.assertEqual("ds2", result[1])
+
     def test_get_datastore_ref_and_name_with_list(self):
         # Test with a regex containing whitelist of datastores
         datastore_valid_regex = re.compile("(openstack-ds0|openstack-ds2)")
@@ -106,11 +123,11 @@ class VMwareVMUtilTestCase(test.NoDBTestCase):
 
         self.assertRaises(exception.DatastoreNotFound,
                 vm_util.get_datastore_ref_and_name,
-                fake_session(), host="fake-host")
+                fake_session(None), host="fake-host")
 
         self.assertRaises(exception.DatastoreNotFound,
                 vm_util.get_datastore_ref_and_name,
-                fake_session(), cluster="fake-cluster")
+                fake_session(None), cluster="fake-cluster")
 
     def test_get_host_ref_from_id(self):
         fake_host_name = "ha-host"

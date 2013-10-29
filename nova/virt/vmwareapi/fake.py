@@ -485,12 +485,14 @@ class ClusterComputeResource(ManagedObject):
 class Datastore(ManagedObject):
     """Datastore class."""
 
-    def __init__(self, name="fake-ds"):
+    def __init__(self, name="fake-ds",
+                 capacity=1024 * unit.Gi,
+                 free_space=500 * unit.Gi):
         super(Datastore, self).__init__("ds")
         self.set("summary.type", "VMFS")
         self.set("summary.name", name)
-        self.set("summary.capacity", 1024 * 1024 * 1024 * 1024)
-        self.set("summary.freeSpace", 500 * 1024 * 1024 * 1024)
+        self.set("summary.capacity", capacity)
+        self.set("summary.freeSpace", free_space)
         self.set("summary.accessible", True)
 
 

@@ -17,7 +17,9 @@ import collections
 import re
 
 from nova import test
+from nova import unit
 from nova.virt.vmwareapi import vm_util
+from nova.virt.vmwareapi.vm_util import DSRecord
 
 ResultSet = collections.namedtuple('ResultSet', ['objects'])
 ResultSetToken = collections.namedtuple('ResultSet', ['objects', 'token'])
@@ -61,7 +63,9 @@ class VMwareVMUtilDatastoreSelectionTestCase(test.NoDBTestCase):
 
     def test_filter_datastores_simple(self):
         datastores = self.build_result_set(self.data)
-        rec = vm_util._get_datastore_ref_and_name(datastores)
+        best_match = DSRecord(datastore=None, name=None,
+                              capacity=None, freespace=0)
+        rec = vm_util._select_datastore(datastores, best_match)
 
         self.assertIsNotNone(rec[0], "could not find datastore!")
         self.assertEqual('ds-001', rec[0].value,
@@ -73,18 +77,23 @@ class VMwareVMUtilDatastoreSelectionTestCase(test.NoDBTestCase):
         data = []
         datastores = self.build_result_set(data)
 
-        rec = vm_util._get_datastore_ref_and_name(datastores)
+        best_match = DSRecord(datastore=None, name=None,
+                              capacity=None, freespace=0)
+        rec = vm_util._select_datastore(datastores, best_match)
 
-        self.assertIsNone(rec)
+        self.assertEqual(rec, best_match)
 
     def test_filter_datastores_no_match(self):
         datastores = self.build_result_set(self.data)
         datastore_regex = re.compile('no_match.*')
 
-        rec = vm_util._get_datastore_ref_and_name(datastores,
-                                                  datastore_regex)
+        best_match = DSRecord(datastore=None, name=None,
+                              capacity=None, freespace=0)
+        rec = vm_util._select_datastore(datastores,
+                                        best_match,
+                                        datastore_regex)
 
-        self.assertIsNone(rec, "did not fail to match datastore properly")
+        self.assertEqual(rec, best_match, "did not match datastore properly")
 
     def test_filter_datastores_specific_match(self):
 
@@ -99,8 +108,11 @@ class VMwareVMUtilDatastoreSelectionTestCase(test.NoDBTestCase):
         datastores = self.build_result_set(data)
         datastore_regex = re.compile('.*-good$')
 
-        rec = vm_util._get_datastore_ref_and_name(datastores,
-                                                  datastore_regex)
+        best_match = DSRecord(datastore=None, name=None,
+                              capacity=None, freespace=0)
+        rec = vm_util._select_datastore(datastores,
+                                        best_match,
+                                        datastore_regex)
 
         self.assertIsNotNone(rec, "could not find datastore!")
         self.assertEqual('ds-003', rec[0].value,
@@ -112,3 +124,23 @@ class VMwareVMUtilDatastoreSelectionTestCase(test.NoDBTestCase):
                          "did not obtain correct freespace!")
         self.assertEqual(987654321, rec[2],
                          "did not obtain correct capacity!")
+
+    def test_filter_datastores_best_match(self):
+        data = [
+            ['VMFS', 'spam-good', True, 20 * unit.Gi, 10 * unit.Gi],
+            ['NFS', 'eggs-good', True, 40 * unit.Gi, 15 * unit.Gi],
+            ['BAD', 'some-name-bad', True, 30 * unit.Gi, 20 * unit.Gi],
+            ['VMFS', 'some-name-good', True, 50 * unit.Gi, 5 * unit.Gi],
+            ['VMFS', 'some-other-good', True, 10 * unit.Gi, 10 * unit.Gi],
+        ]
+
+        datastores = self.build_result_set(data)
+        datastore_regex = re.compile('.*-good$')
+
+        # the current best match is better than all candidates
+        best_match = DSRecord(datastore='ds-100', name='best-ds-good',
+                              capacity=20 * unit.Gi, freespace=19 * unit.Gi)
+        rec = vm_util._select_datastore(datastores,
+                                        best_match,
+                                        datastore_regex)
+        self.assertEqual(rec, best_match, "did not match datastore properly")
