@@ -1,0 +1,204 @@
+commit ff775fec1320abdbba1e99fae84842466c77d161
+Author: Yaguang Tang <yaguang.tang@canonical.com>
+Date:   Tue Oct 15 12:40:21 2013 +0800
+
+    VMware add instance ephemeral disk support
+    
+    This patch fixes the bug that VMware Hyper driver doesn't honour
+    instance flavor ephemeral disk.
+    
+    Related blueprint improve-vmware-disk-usage
+    
+    Change-Id: Ic72c1ae7a6cb6b7c139acc68fbbdb5cfbf2b765f
+
+commit 84cb625bd127d3a3c531a4fb3ee6e2fb53a4a38f
+Author: Jay Lau <liugya@cn.ibm.com>
+Date:   Fri Oct 18 22:38:13 2013 +0800
+
+    VMware: Detach volume should not delete vmdk
+    
+    During volume detach a delete_virtual_disk_spec is used to remove
+    the device from the running instance. This spec also "destroy" the
+    underlying vmdk file, this is not right, we should not delete vmdk
+    file when detach it from a VM instance.
+    
+    The fix was remove the fileOperation field when detach vmdk volume
+    so as to make sure the volume will not be destroyed; but for iscsi
+    we still need to destroy the volume.
+    
+    Also I changed the function name from delete_virtual_disk_spec to
+    detach_virtual_disk_spec which is more accurate.
+    
+    Change-Id: Ibd218d6a8cfeede4f5ca74f28bc0c3d0c185bb14
+    Closes-Bug: #1241350
+
+commit a1b291d2d3409acfeff96312bf7b3d1eb424cd49
+Author: Gary Kotton <gkotton@vmware.com>
+Date:   Wed Oct 30 00:18:05 2013 -0700
+
+    VMware: fix missing datastore regex with ESX driver
+    
+    When using shared datastore and the ESX driver the administrator
+    is unable to indicate which datastore to use.
+    
+    Change-Id: Ifb0a4a8df2b26f3521b1301462d1f2c3eeba5c14
+    Closes-bug: #1246206
+
+commit 6dd4182bb57b20742f32c67f2e00a588ebe3f1f3
+Author: Gary Kotton <gkotton@vmware.com>
+Date:   Wed Oct 9 23:35:12 2013 -0700
+
+    VMware: fix bug for reporting instance UUID's
+    
+    Ensure that the correct UUID's are reported to the compute
+    manager. The fix will return only valid UUID's and not all
+    of the names of the instances running.
+    
+    Closes-Bug: #1237795
+    
+    Change-Id: I32bb6f4783dcc80697abebd5a7f45ef9950a0896
+    (cherry picked from commit 74289aacb5363bd72b449580325a651117e5342d)
+    
+    Conflicts:
+    
+    	nova/tests/virt/vmwareapi/test_vmwareapi.py
+
+commit f9f6605d96faccc4b3d2d6972e0b08b56f1ce62a
+Author: Gary Kotton <gkotton@vmware.com>
+Date:   Mon Oct 28 03:19:34 2013 -0700
+
+    VMware: upload images to temporary directory
+    
+    The patch ensures that new images are uploaded to a defined
+    temporary directory instead of directly to the cache directory.
+    
+    The reason for this are as follows:
+    1. More than one nova-compute may try and upload the same image
+    to the datastore at the same time
+    2. If there are errors then the temporary folder can be purged
+    (this will be done in a different patch)
+    3. When the image is downloaded it will be moved to the cache
+    directory. Only once an image has been successfully downloaded
+    will it be moved. This will help with false positives with
+    cache image deletion
+    
+    Two new configuration variables have been added (in the 'vmware'
+    folder):
+        - tmp_folder - the temporary folder
+        - cache_folder - the folder to cache images
+    
+    The first phase of blueprint vmware-image-cache-management.
+    
+    DocImpact
+    
+    Change-Id: I4f3ee90ae866583e8df782ff89d2b11bbebf9c39
+    
+    Conflicts:
+    
+    	nova/virt/vmwareapi/vmops.py
+
+commit f176e3b61b831cd96da97431cfa43c28d8e9e193
+Author: Gary Kotton <gkotton@vmware.com>
+Date:   Fri Oct 18 06:12:40 2013 -0700
+
+    VMware: fix bug when more than one datacenter exists
+    
+    In the case that there was more than one datacenter defined on the VC,
+    then spawning an instance would result in an exception. The reason for this
+    was that the nova compute would not set the correct datacenter for the
+    selected datastore.
+    
+    The fix also takes care of the correct folder selection. This too was a
+    result of not selecting the correct folder for the data center.
+    
+    The 'fake' configuration was updated to contain an additional data
+    center with its on datastore.
+    
+    Closes-Bug: #1180044
+    Closes-Bug: #1214850
+    
+    Co-authored-by: Shawn Harsock <hartsocks@vmware.com>
+    
+    Change-Id: Ib61811fffcbc80385efc3166c9e366fdaa6432bd
+    
+    Conflicts:
+    
+    	nova/tests/virt/vmwareapi/test_vmwareapi.py
+    	nova/virt/vmwareapi/fake.py
+    	nova/virt/vmwareapi/vmops.py
+
+commit 1c0a3c63e1841d2b24132096c0aa57a2190986d9
+Author: Radoslav Gerganov <rgerganov@vmware.com>
+Date:   Tue Oct 29 17:41:52 2013 +0200
+
+    VMware: fix datastore selection when token is returned
+    
+    Use the token returned by the PropertyCollector to iterate
+    over the complete set of datastores and select the best
+    match based on the regular expression and the free space on
+    the datastore.
+    
+    Closes-Bug: #1245564
+    Change-Id: If24c37a41bfa994a990aaa4a3e21d16b33aad42f
+    
+    Conflicts:
+    
+    	nova/virt/vmwareapi/fake.py
+
+commit 4239f79503b9554590adcf05b8a9558ab7be610e
+Author: Kartik Bommepally <kbommepally@vmware.com>
+Date:   Sat Oct 26 03:35:14 2013 -0700
+
+    VMware ESX: Boot from volume must not relocate vol
+    
+    ESX does not support relocate API. Moreover when working with ESX the boot
+    from volume logic need not perform relocation since the volume's datastore
+    is always visible to the ESX host.
+    
+    The fix is to ignore relocation when working with ESX.
+    
+    Also made a trivial logging change to read task name only when provided
+    by the server. Task name is optional property and will not always be set by
+    the server. This is to avoid AttributeError which was constantly observed
+    when instance was being powered-on.
+    
+    Change-Id: I227cf2ea5b6f681150ede0bf6257eb238f1452d2
+    Closes-bug: #1244918
+    
+    Conflicts:
+    
+    	nova/tests/virt/vmwareapi/test_vmwareapi.py
+
+commit 947e6782dfee6ca98bcfae7bf6f7b8b2e935036b
+Author: Gary Kotton <gkotton@vmware.com>
+Date:   Sun Sep 22 05:50:38 2013 -0700
+
+    VMWare: bug fix for Vim exception handling
+    
+    The exception handling in the Vim module was too broad and did not treat
+    the suds.MethodNotFound exception. This would result in a exception
+    that "__deepcopy__" is not supported in the VIM module.
+    
+    In the case of an exception the VMwareAPISession class may be deleted.
+    The patch also ensures that the deletion is able to logout if necessary.
+    
+    Fixes bug: 1228847
+    
+    Change-Id: Ic85be9b3407c444db4b3a074108c01d9141c61be
+
+commit c59b9de4bd069c574887a47d099e4ca14a752c2c
+Author: Gary Kotton <gkotton@vmware.com>
+Date:   Tue Oct 22 05:51:09 2013 -0700
+
+    VMware: enable driver to work with postgres database
+    
+    The hypervisor version is expected to be an integer and not
+    a string.
+    
+    Change-Id: Ifac9ca3480191413e3a02f0dae94e452707ae82f
+    Closes-Bug: #1195139
+    
+    Conflicts:
+    
+    	nova/tests/virt/vmwareapi/test_vmwareapi.py
+
