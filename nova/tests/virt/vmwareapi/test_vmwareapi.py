@@ -339,7 +339,7 @@ class VMwareAPIVMTestCase(test.NoDBTestCase):
 
     def test_ephemeral_disk_created(self):
         self._create_vm(uuid='fake-uuid')
-        file_path = '[fake-ds] fake-uuid/ephemeral_disk.vmdk'
+        file_path = '[%s] fake-uuid/ephemeral_disk.vmdk' % self.ds
         self.assertEqual(vmwareapi_fake.get_file(file_path), True)
 
     def test_spawn(self):

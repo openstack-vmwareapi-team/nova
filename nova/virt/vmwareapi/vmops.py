@@ -513,7 +513,7 @@ class VMwareVMOps(object):
                 if disk_type == "sparse":
                     # Copy the sparse virtual disk to a thin virtual disk.
                     disk_type = "thin"
-                    _copy_virtual_disk(upload_folder, vmdk_path)
+                    _copy_virtual_disk(sparse_uploaded_vmdk_path, vmdk_path)
                     _delete_disk_file(sparse_uploaded_vmdk_path)
 
                 base_folder = '%s/%s' % (self._base_folder, upload_name)
@@ -597,7 +597,7 @@ class VMwareVMOps(object):
                                         "CreateVirtualDisk_Task",
                                         service_content.virtualDiskManager,
                                         name=ephemeral_disk_path,
-                                        datacenter=dc_ref,
+                                        datacenter=dc_map.ref,
                                         spec=disk_create_spec)
 
                 self._session._wait_for_task(instance['uuid'],
